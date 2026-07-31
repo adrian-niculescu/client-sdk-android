@@ -23,6 +23,7 @@ import io.livekit.android.webrtc.RTCStatsGetter
 import io.livekit.android.webrtc.getStats
 import io.livekit.android.webrtc.peerconnection.RTCThreadToken
 import io.livekit.android.webrtc.peerconnection.executeBlockingOnRTCThread
+import kotlinx.coroutines.sync.Mutex
 import livekit.LivekitModels
 import livekit.LivekitRtc
 import livekit.org.webrtc.MediaStreamTrack
@@ -54,9 +55,46 @@ abstract class Track(
     }
         internal set
 
+    // Set when the SDK disables the track because its publish failed, and cleared by
+    // any other enabled-state change. Touched only on the RTC thread, which
+    // serializes it with the state change it describes.
+    private var stoppedByFailedPublish = false
+
+    // A source lock prevents duplicate publications for one source. This lock also
+    // prevents the same media track from being published concurrently under different sources.
+    internal val publishLock = Mutex()
+
     var enabled: Boolean
         get() = withRTCTrack(defaultValue = false) { rtcTrack.enabled() }
-        set(value) = withRTCTrack { rtcTrack.setEnabled(value) }
+        set(value) {
+            withRTCTrack {
+                stoppedByFailedPublish = false
+                rtcTrack.setEnabled(value)
+            }
+        }
+
+    // Disables the track, recording that the SDK did so because a publish failed, so
+    // that a later republish can tell it apart from a stop the consumer asked for.
+    internal fun stopForFailedPublish() {
+        withRTCTrack {
+            rtcTrack.setEnabled(false)
+            stoppedByFailedPublish = true
+        }
+    }
+
+    // Re-enables the track only while the SDK's failed-publish stop is still the last
+    // enabled-state change; returns whether it did.
+    internal fun restartIfStoppedByFailedPublish(): Boolean {
+        return withRTCTrack(defaultValue = false) {
+            if (stoppedByFailedPublish) {
+                stoppedByFailedPublish = false
+                rtcTrack.setEnabled(true)
+                true
+            } else {
+                false
+            }
+        }
+    }
 
     var statsGetter: RTCStatsGetter? = null
 
