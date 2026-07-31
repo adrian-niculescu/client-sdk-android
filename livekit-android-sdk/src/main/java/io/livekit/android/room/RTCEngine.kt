@@ -391,17 +391,22 @@ internal constructor(
         stream: String?,
         builder: LivekitRtc.AddTrackRequest.Builder = LivekitRtc.AddTrackRequest.newBuilder(),
     ): LivekitModels.TrackInfo {
-        synchronized(pendingTrackResolvers) {
-            if (pendingTrackResolvers[cid] != null) {
-                throw TrackException.DuplicateTrackException("Track with same ID $cid has already been published!")
-            }
-        }
-
         // Suspend until signal client receives message confirming track publication.
         return withDeadline(20.seconds) {
             suspendCancellableCoroutine { cont ->
-                synchronized(pendingTrackResolvers) {
-                    pendingTrackResolvers[cid] = cont
+                val registered = synchronized(pendingTrackResolvers) {
+                    if (pendingTrackResolvers[cid] != null) {
+                        false
+                    } else {
+                        pendingTrackResolvers[cid] = cont
+                        true
+                    }
+                }
+                if (!registered) {
+                    cont.resumeWithException(
+                        TrackException.DuplicateTrackException("Track with same ID $cid has already been published!"),
+                    )
+                    return@suspendCancellableCoroutine
                 }
                 cont.invokeOnCancellation {
                     synchronized(pendingTrackResolvers) {

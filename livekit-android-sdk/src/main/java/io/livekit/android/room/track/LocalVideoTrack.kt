@@ -139,9 +139,13 @@ constructor(
         capturer.stopCapture()
     }
 
+    // Failed-publish recovery checks enabled after restarting capture. Disabling
+    // first lets a concurrent recovery observe this stop and release the camera.
+    // Capturer calls stay on the caller's thread because camera callbacks can invoke
+    // stop() while holding the capturer's state lock.
     override fun stop() {
-        capturer.stopCapture()
         super.stop()
+        capturer.stopCapture()
     }
 
     override fun dispose() {
