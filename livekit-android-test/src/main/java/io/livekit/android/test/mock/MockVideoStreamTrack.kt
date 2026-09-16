@@ -23,7 +23,7 @@ import java.util.UUID
 class MockVideoStreamTrack(
     val id: String = UUID.randomUUID().toString(),
     val kind: String = VIDEO_TRACK_KIND,
-    var enabled: Boolean = true,
+    private var enabled: Boolean = true,
     var state: State = State.LIVE,
 ) : VideoTrack(1L) {
     val sinks = mutableSetOf<VideoSink>()
