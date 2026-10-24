@@ -1437,6 +1437,16 @@ internal constructor(
         }
     }
 
+    internal fun handleSubscribedCodecRefresh() {
+        if (!dynacast) {
+            return
+        }
+
+        videoTrackPublications.forEach { (_, track) ->
+            (track as? LocalVideoTrack)?.refreshSubscribedCodecs()
+        }
+    }
+
     private fun publishAdditionalCodecForTrack(track: LocalVideoTrack, codec: VideoCodec, options: VideoTrackPublishOptions) {
         val existingPublication = trackPublications[track.sid] ?: run {
             LKLog.w { "attempting to publish additional codec for non-published track?!" }
